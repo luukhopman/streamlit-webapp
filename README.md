@@ -1,7 +1,7 @@
 # League Standings by Gameweek Webapp
 
 ## Information
-Streamlit webapp that generates Seasonal League Standings overviews with Bezier Curves. Hosted on [Heroku](https://league-tables.herokuapp.com/).
+Streamlit webapp that generates Seasonal League Standings overviews with Bezier Curves. Hosted on [Heroku](https://standings-by-matchday.herokuapp.com/).
 
 Supported leagues:
 * `Premier League`
