@@ -340,7 +340,7 @@ def get_image_download_link(fig):
     buffered = BytesIO()
     fig.savefig(buffered, bbox_inches='tight', dpi=200)
     img_str = base64.b64encode(buffered.getvalue()).decode()
-    href = f'<a href="data:file/png;base64,{img_str}" download="league-standings-overview.png">Download</a>'
+    href = f'<a href="data:file/png;base64,{img_str}" download="league-standings-overview.png">*download (.png)*</a>'
     return href
 
 
@@ -354,14 +354,14 @@ def get_table_download_link(df):
     csv = df.to_csv()
     # some strings <-> bytes conversions necessary here
     b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="raw_data.csv">*Download*</a>'
+    href = f'<a href="data:file/csv;base64,{b64}" download="raw_data.csv">*download (.csv)*</a>'
     return href
 
 
 st.markdown(f'''
             ### Downloads
-            * Image (.png): {get_image_download_link(fig)}
-            * Raw data (.csv):
+            * Image: {get_image_download_link(fig)}
+            * Raw data:
             {get_table_download_link(standings)}
             ''',
             unsafe_allow_html=True)
