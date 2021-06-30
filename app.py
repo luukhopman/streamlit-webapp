@@ -102,6 +102,11 @@ def get_patch(p1, p2, color):
     return patch
 
 
+# ---------- Page setup ----------
+st.set_page_config(page_title='League Standings',
+                   page_icon='./static/favicon.ico')
+
+
 # ---------- Change report view width ----------
 
 st.markdown(
@@ -151,11 +156,11 @@ first_season, last_season = get_season_range(league)
 season = st.sidebar.number_input('Season',
                                  min_value=first_season,
                                  max_value=last_season,
-                                 value=2020,
+                                 value=2021,
                                  help='Enter the last year of the season')
-if season:
-    season_title = f'Selected season: {season-1}/{str(season)[2:]}'
-    st.sidebar.write(season_title)
+
+season_title = f'Selected season: {season-1}/{str(season)[2:]}'
+st.sidebar.write(season_title)
 
 with st.spinner('Scraping data...'):
     standings = scrape_standings(league, season)
@@ -250,7 +255,6 @@ for team_name in team_names:
             fontname='Rockwell')
 
 # Title
-
 if custom_title:
     title = custom_title
 else:
