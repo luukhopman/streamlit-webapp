@@ -1,17 +1,17 @@
 import base64
+from io import BytesIO
 import streamlit as st
 import pandas as pd
-import numpy as np
 import requests
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from highlight_text import ax_text, fig_text
+from highlight_text import fig_text
+from PIL import Image
+
 
 # ---------- Define functions ----------
-
 
 def get_url(league, season, week=1):
     '''Generates the appropriate URL based on the parameters'''
@@ -103,6 +103,7 @@ def get_patch(p1, p2, color):
 
 
 # ---------- Page setup ----------
+
 st.set_page_config(page_title='League Standings',
                    page_icon='./static/favicon.ico')
 
@@ -114,10 +115,10 @@ st.markdown(
      <style>
         .reportview-container .main .block-container{{
             max-width: 1500px;
-            padding-top: 5rem;
-            padding-right: 5rem;
-            padding-left: 5rem;
-            padding-bottom: 5rem;
+            padding-top: 1re,;
+            padding-right: 1re,;
+            padding-left: 1re,;
+            padding-bottom: 1re,;
             }}
         .reportview-container .main {{
             background-color: #49505c;
@@ -138,14 +139,6 @@ league_dict = {'Premier League': 'eng-premier-league',
                'Ligue 1': 'fra-ligue-1',
                'Eredivisie': 'ned-eredivisie',
                'Primeira Liga': 'por-primeira-liga'}
-
-league_min_season = {'Premier League': 'eng-premier-league',
-                     'La Liga': 'esp-primera-division',
-                     'Bundesliga': 'bundesliga',
-                     'Serie A': 'ita-serie-a',
-                     'Ligue 1': 'fra-ligue-1',
-                     'Eredivisie': 'ned-eredivisie',
-                     'Primeira Liga': 'por-primeira-liga'}
 
 st.sidebar.markdown('## Select League and Season')
 
@@ -179,7 +172,6 @@ st.sidebar.markdown('## Plot aesthetics')
 highlight_options = standings.values[:, -1]  # order of last gameweek
 highlights = st.sidebar.multiselect(label='Highlight teams',
                                     options=highlight_options)
-
 
 # Highlight color picker
 colors = []
@@ -223,7 +215,7 @@ facecolor = st.sidebar.color_picker(label='Background color',
 # ---------- Draw plot ----------
 
 fig, ax = plt.subplots(facecolor=facecolor,
-                       figsize=(18, 18*aspect_ratio),
+                       figsize=(20, 20*aspect_ratio),
                        dpi=200)
 
 for team_name in team_names:
@@ -246,7 +238,7 @@ for team_name in team_names:
         ax.plot(i, j, 'o', color=color, alpha=0.3, zorder=1)
 
     # Team name at the end of the line
-    ax.text(x=num_games,
+    ax.text(x=num_games-0.25,
             y=coords[-1][-1],
             s=team_name,
             va='center',
@@ -340,7 +332,20 @@ y_labels = [ax.text(x=-0.5,
 st.pyplot(fig)
 
 
-# ---------- Raw data ----------
+# ---------- Download links ----------
+
+def get_image_download_link(fig):
+    """Generates a link allowing the MPL image to be downloaded
+    in:  MPL image
+    out: href string
+    """
+    buffered = BytesIO()
+    fig.savefig(buffered, bbox_inches='tight', dpi=200)
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    href = f'<a href="data:file/png;base64,{img_str}" download="league-standings-overview.png">Download</a>'
+    return href
+
+
 def get_table_download_link(df):
     """
     (Adapted from https://discuss.streamlit.io/t/how-to-download-file-in-streamlit/1806)
@@ -348,11 +353,17 @@ def get_table_download_link(df):
     in:  dataframe
     out: href string
     """
-    csv = df.to_csv(index=False)
+    csv = df.to_csv()
     # some strings <-> bytes conversions necessary here
     b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="raw_data.csv">*Download raw data as .csv*</a>'
+    href = f'<a href="data:file/csv;base64,{b64}" download="raw_data.csv">*Download*</a>'
     return href
 
 
-st.markdown(get_table_download_link(standings), unsafe_allow_html=True)
+st.markdown(f'''
+            ### Downloads
+            * Image (.png): {get_image_download_link(fig)}
+            * Raw data (.csv):
+            {get_table_download_link(standings)}
+            ''',
+            unsafe_allow_html=True)
