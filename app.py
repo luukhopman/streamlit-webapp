@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 from highlight_text import fig_text
-from PIL import Image
 
 
 # ---------- Define functions ----------
@@ -38,7 +37,7 @@ def get_season_range(league):
 @st.cache(show_spinner=False)
 def scrape_standings(league, season):
     '''
-    Returns a DataFrame with the league standings by gameweek for a given season
+    Returns a DataFrame with the league standings by matchday for a given season
     '''
     week = 1
     standings = []
@@ -55,7 +54,6 @@ def scrape_standings(league, season):
             standings.append(teams)
             week += 1
 
-    # Return DataFrame
     return pd.DataFrame(standings).T
 
 
@@ -169,7 +167,7 @@ team_names = standings.iloc[:, -1].to_list()
 st.sidebar.markdown('## Plot aesthetics')
 
 # Team selection
-highlight_options = standings.values[:, -1]  # order of last gameweek
+highlight_options = standings.values[:, -1]  # order of last matchday
 highlights = st.sidebar.multiselect(label='Highlight teams',
                                     options=highlight_options)
 
@@ -252,7 +250,7 @@ if custom_title:
 else:
     league_title = league.title()
     season_title = str(season-1) + '/' + str(season)[2:]
-    title = f'{league_title} {season_title} Standings by Gameweek'
+    title = f'{league_title} {season_title} Standings by Matchday'
 
 fig.text(x=0.5,
          y=0.84,
@@ -288,7 +286,7 @@ if subtitle and highlight_colors:
 # X-axis
 ax.text(x=num_games/2,
         y=num_teams+0.5,
-        s='Gameweek',
+        s='Matchday',
         fontsize=12,
         c='w',
         va='center',
