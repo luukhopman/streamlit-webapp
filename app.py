@@ -1,6 +1,7 @@
 import base64
 from io import BytesIO
 import streamlit as st
+import SessionState
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -100,7 +101,108 @@ def get_patch(p1, p2, color):
     return patch
 
 
+def draw_plot(league, season, standings, highlight_colors,
+              facecolor, custom_title, subtitle):
+    num_teams = len(standings)
+    num_games = len(standings.columns)
+    team_names = standings.iloc[:, -1].to_list()
+
+    # Reorder team name list to emphasize highlighted lines
+    for team in highlight_colors.keys():
+        team_names.append(team_names.pop(team_names.index(team)))
+
+    fig, ax = plt.subplots(facecolor=facecolor,
+                           figsize=(20, 20*aspect_ratio),
+                           dpi=200)
+
+    for team_name in team_names:
+        # Determine text color and fontweight
+        color = highlight_colors.get(team_name, 'dimgrey')
+        fontweight = 'bold' if color != 'dimgrey' else None
+
+        indices = standings[standings == team_name].stack().index.tolist()
+        coords = [(idx[1], idx[0]) for idx in indices]
+        coords = [(int(coord[0]), coord[1]) for coord in coords]
+        coords = sorted(coords, key=lambda x: x[0])
+
+        # Plot patches
+        for p1, p2 in zip(coords[:-1], coords[1:]):
+            patch = get_patch(p1, p2, color=color)
+            ax.add_patch(patch)
+
+        # Plot dots
+        for i, j in coords:
+            ax.plot(i, j, 'o', color=color, alpha=0.3, zorder=1)
+
+        # Team name at the end of the line
+        ax.text(x=num_games-0.25, y=coords[-1][-1], s=team_name, va='center',
+                color=color, fontweight=fontweight, fontname='Rockwell')
+
+    # Title
+    if custom_title:
+        title = custom_title
+    else:
+        league_title = league.title()
+        season_title = str(season-1) + '/' + str(season)[2:]
+        title = f'{league_title} {season_title} Standings by Matchday'
+
+    fig.text(x=0.5, y=0.84, s=title, color='w', fontsize=22,
+             fontweight='bold', fontname='Rockwell', ha='center')
+
+    # Subtitle
+    if subtitle and highlight_colors:
+        subtitle_teams, subtitle_colors = zip(*highlight_colors.items())
+        subtitle_teams_hl = [f'<{team}>' for team in subtitle_teams]
+        if len(subtitle_teams) == 1:
+            subtitle_text = f"The season of {subtitle_teams_hl[0]}."
+        elif len(subtitle_teams) == 2:
+            subtitle_text = f"The seasons of {' and '.join(subtitle_teams_hl)}."
+        elif len(subtitle_teams) > 2:
+            subtitle_text = f"The seasons of {', '.join(subtitle_teams_hl[:-2])}, {' and '.join(subtitle_teams_hl[-2:])}."
+
+        highlight_textprops = [{'color': c,
+                                'fontweight': 'bold'} for c in subtitle_colors]
+        fig_text(x=0.5,
+                 y=0.82,
+                 s=subtitle_text,
+                 color='w',
+                 highlight_textprops=highlight_textprops,
+                 fontsize=18,
+                 ha='center',
+                 fontname='Rockwell')
+
+    # X-axis
+    ax.text(x=num_games/2, y=num_teams+0.5, s='Matchday',
+            fontsize=12, c='w', va='center', ha='center')
+
+    # Y-axis
+    ax.text(x=-1.25, y=num_teams/2, s='Position', rotation=90,
+            fontsize=12, c='w', va='bottom', ha='center')
+
+    # Axis configuration
+    ax.set_axis_off()
+
+    ax.set_xlim(-2, num_games+2)
+    if subtitle:
+        ax.set_ylim(-3.5, num_teams+1)
+    else:
+        ax.set_ylim(-2, num_teams+1)
+
+    ax.invert_yaxis()
+
+    # Tick labels
+    x_labels = [ax.text(x=i-1, y=num_teams-0.25, s=i, ha='center',
+                        va='center', c='w', size=8)
+                for i in range(1, num_games+1)]
+
+    y_labels = [ax.text(x=-0.5, y=i, s=i+1, ha='center',
+                        va='center', c='w', size=8)
+                for i in range(num_teams)]
+
+    return fig
+
 # ---------- Page setup ----------
+
 
 st.set_page_config(page_title='League Standings',
                    page_icon='./static/favicon.ico')
@@ -126,8 +228,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 # ---------- League and Season Selection ----------
+
+session_state = SessionState.get(checkboxed=False)
 
 # League name mapping to worldfootball.net identifier
 league_dict = {'Premier League': 'eng-premier-league',
@@ -153,198 +256,82 @@ season = st.sidebar.number_input('Season',
 season_title = f'Selected season: {season-1}/{str(season)[2:]}'
 st.sidebar.write(season_title)
 
-with st.spinner('Scraping data...'):
-    standings = scrape_standings(league, season)
-
-num_teams = len(standings)
-num_games = len(standings.columns)
-team_names = standings.iloc[:, -1].to_list()
-
+if st.sidebar.button('Gather data') or session_state.checkboxed:
+    with st.spinner('Scraping data...'):
+        standings = scrape_standings(league, season)
+        session_state.checkboxed = True
 
 # ---------- Plot configuration ----------
+if session_state.checkboxed:
+    # Sidebar title
+    st.sidebar.markdown('## Plot aesthetics')
 
-# Sidebar title
-st.sidebar.markdown('## Plot aesthetics')
+    # Team selection
+    highlight_options = standings.values[:, -1]  # order of last matchday
+    highlights = st.sidebar.multiselect(label='Highlight teams',
+                                        options=highlight_options)
 
-# Team selection
-highlight_options = standings.values[:, -1]  # order of last matchday
-highlights = st.sidebar.multiselect(label='Highlight teams',
-                                    options=highlight_options)
+    # Highlight color picker
+    colors = []
+    default_colors = ['#FF0000', '#2EFDF7', '#3BEF1D', '#E64BF7']
+    for i, team in enumerate(highlights):
+        if i < len(default_colors):
+            value = default_colors[i]
+        else:
+            value = '#ffffff'
+        color = st.sidebar.color_picker(label=team, value=value)
+        colors.append(color)
 
-# Highlight color picker
-colors = []
-default_colors = ['#FF0000', '#2EFDF7', '#3BEF1D', '#E64BF7']
-for i, team in enumerate(highlights):
-    if i < len(default_colors):
-        value = default_colors[i]
+    highlight_colors = {i: c for i, c in zip(highlights, colors)}
+
+    # Titles
+    st.sidebar.markdown('---')
+    custom_title = st.sidebar.text_input('Custom Title', max_chars=40)
+
+    if highlights:
+        subtitle = st.sidebar.checkbox(label='Subtitle', value=True)
     else:
-        value = '#ffffff'
-    color = st.sidebar.color_picker(label=team, value=value)
-    colors.append(color)
+        subtitle = False
 
-highlight_colors = {i: c for i, c in zip(highlights, colors)}
+    # Aspect ratio slider
+    st.sidebar.markdown('---')
+    aspect_ratio = st.sidebar.slider(label='Aspect ratio',
+                                     min_value=0.4,
+                                     max_value=0.8,
+                                     value=0.60,
+                                     step=0.05)
 
-# Reorder team name list to emphasize highlighted lines
-for team in highlight_colors.keys():
-    team_names.append(team_names.pop(team_names.index(team)))
-
-# Titles
-st.sidebar.markdown('---')
-custom_title = st.sidebar.text_input('Custom Title', max_chars=40)
-
-if highlights:
-    subtitle = st.sidebar.checkbox(label='Subtitle', value=True)
-else:
-    subtitle = False
-
-# Aspect ratio slider
-st.sidebar.markdown('---')
-aspect_ratio = st.sidebar.slider(label='Aspect ratio',
-                                 min_value=0.4,
-                                 max_value=0.8,
-                                 value=0.60,
-                                 step=0.05)
-
-# Background color picker
-st.sidebar.markdown('---')
-facecolor = st.sidebar.color_picker(label='Background color',
-                                    value='#111111')
-
-# ---------- Draw plot ----------
-
-fig, ax = plt.subplots(facecolor=facecolor,
-                       figsize=(20, 20*aspect_ratio),
-                       dpi=200)
-
-for team_name in team_names:
-    # Determine text color and fontweight
-    color = highlight_colors.get(team_name, 'dimgrey')
-    fontweight = 'bold' if color != 'dimgrey' else None
-
-    indices = standings[standings == team_name].stack().index.tolist()
-    coords = [(idx[1], idx[0]) for idx in indices]
-    coords = [(int(coord[0]), coord[1]) for coord in coords]
-    coords = sorted(coords, key=lambda x: x[0])
-
-    # Plot patches
-    for p1, p2 in zip(coords[:-1], coords[1:]):
-        patch = get_patch(p1, p2, color=color)
-        ax.add_patch(patch)
-
-    # Plot dots
-    for i, j in coords:
-        ax.plot(i, j, 'o', color=color, alpha=0.3, zorder=1)
-
-    # Team name at the end of the line
-    ax.text(x=num_games-0.25,
-            y=coords[-1][-1],
-            s=team_name,
-            va='center',
-            color=color,
-            fontweight=fontweight,
-            fontname='Rockwell')
-
-# Title
-if custom_title:
-    title = custom_title
-else:
-    league_title = league.title()
-    season_title = str(season-1) + '/' + str(season)[2:]
-    title = f'{league_title} {season_title} Standings by Matchday'
-
-fig.text(x=0.5,
-         y=0.84,
-         s=title,
-         color='w',
-         fontsize=22,
-         fontweight='bold',
-         fontname='Rockwell',
-         ha='center',)
-
-# Subtitle
-if subtitle and highlight_colors:
-    subtitle_teams, subtitle_colors = zip(*highlight_colors.items())
-    subtitle_teams_hl = [f'<{team}>' for team in subtitle_teams]
-    if len(subtitle_teams) == 1:
-        subtitle_text = f"{subtitle_teams_hl[0]} highlighted."
-    elif len(subtitle_teams) == 2:
-        subtitle_text = f"Comparison between {' and '.join(subtitle_teams_hl)}."
-    elif len(subtitle_teams) > 2:
-        subtitle_text = f"Comparison between {', '.join(subtitle_teams_hl[:-2])}, {' and '.join(subtitle_teams_hl[-2:])}."
-
-    highlight_textprops = [{'color': c,
-                            'fontweight': 'bold'} for c in subtitle_colors]
-    fig_text(x=0.5,
-             y=0.82,
-             s=subtitle_text,
-             color='w',
-             highlight_textprops=highlight_textprops,
-             fontsize=18,
-             ha='center',
-             fontname='Rockwell')
-
-# X-axis
-ax.text(x=num_games/2,
-        y=num_teams+0.5,
-        s='Matchday',
-        fontsize=12,
-        c='w',
-        va='center',
-        ha='center')
-
-# Y-axis
-ax.text(x=-1.25,
-        y=num_teams/2,
-        s='Position',
-        rotation=90,
-        fontsize=12,
-        c='w',
-        va='bottom',
-        ha='center')
-
-# Axis configuration
-ax.set_axis_off()
-ax.set_xlim(-2, num_games+2)
-ax.set_ylim(-4, num_teams+1)
-ax.invert_yaxis()
-
-# Tick labels
-x_labels = [ax.text(x=i-1,
-                    y=num_teams-0.25,
-                    s=i,
-                    ha='center',
-                    va='center',
-                    c='w',
-                    size=8) for i in range(1, num_games+1)]
-
-y_labels = [ax.text(x=-0.5,
-                    y=i,
-                    s=i+1,
-                    ha='center',
-                    va='center',
-                    c='w',
-                    size=8) for i in range(num_teams)]
+    # Background color picker
+    st.sidebar.markdown('---')
+    facecolor = st.sidebar.color_picker(label='Background color',
+                                        value='#111111')
 
 
 # ---------- Display plot ----------
-st.pyplot(fig)
+if session_state.checkboxed:
+    fig = draw_plot(league, season, standings, highlight_colors,
+                    facecolor, custom_title, subtitle)
+
+    st.pyplot(fig)
 
 
 # ---------- Download links ----------
 
-def get_image_download_link(fig):
-    """Generates a link allowing the MPL image to be downloaded
+def get_image_download_link(fig, filename):
+    """
+    (Adapted from https://discuss.streamlit.io/t/how-to-download-file-in-streamlit/1806)
+    Generates a link allowing the MPL image to be downloaded
     in:  MPL image
     out: href string
     """
     buffered = BytesIO()
     fig.savefig(buffered, bbox_inches='tight', dpi=200)
-    img_str = base64.b64encode(buffered.getvalue()).decode()
-    href = f'<a href="data:file/png;base64,{img_str}" download="league-standings-overview.png">*download (.png)*</a>'
+    b64 = base64.b64encode(buffered.getvalue()).decode()
+    href = f'<a href="data:file/png;base64,{b64}" download="{filename}.png">*download (.png)*</a>'
     return href
 
 
-def get_table_download_link(df):
+def get_table_download_link(df, filename):
     """
     (Adapted from https://discuss.streamlit.io/t/how-to-download-file-in-streamlit/1806)
     Generates a link allowing the data in a given panda dataframe to be downloaded
@@ -352,16 +339,18 @@ def get_table_download_link(df):
     out: href string
     """
     csv = df.to_csv()
-    # some strings <-> bytes conversions necessary here
     b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="raw_data.csv">*download (.csv)*</a>'
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}.csv">*download (.csv)*</a>'
     return href
 
 
-st.markdown(f'''
-            ### Downloads
-            * Image: {get_image_download_link(fig)}
-            * Raw data:
-            {get_table_download_link(standings)}
-            ''',
-            unsafe_allow_html=True)
+if session_state.checkboxed and st.button('Generate download links'):
+    filename = f"{'-'.join(league.lower().split())}_{season}"
+
+    st.markdown(f'''
+                ### Downloads
+                * Image: {get_image_download_link(fig, filename)}
+                * Raw data:
+                {get_table_download_link(standings, filename)}
+                ''',
+                unsafe_allow_html=True)
