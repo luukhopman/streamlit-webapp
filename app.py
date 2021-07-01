@@ -135,7 +135,7 @@ def draw_plot(league, season, standings, highlight_colors,
             ax.plot(i, j, 'o', color=color, alpha=0.3, zorder=1)
 
         # Team name at the end of the line
-        ax.text(x=num_games-0.25, y=coords[-1][-1], s=team_name, va='center',
+        ax.text(x=num_games-0.3, y=coords[-1][-1], s=team_name, va='center',
                 color=color, fontweight=fontweight, fontname='Rockwell')
 
     # Title
@@ -154,22 +154,16 @@ def draw_plot(league, season, standings, highlight_colors,
         subtitle_teams, subtitle_colors = zip(*highlight_colors.items())
         subtitle_teams_hl = [f'<{team}>' for team in subtitle_teams]
         if len(subtitle_teams) == 1:
-            subtitle_text = f"The season of {subtitle_teams_hl[0]}."
+            subtitle_text = f"The season of {subtitle_teams_hl[0]}"
         elif len(subtitle_teams) == 2:
-            subtitle_text = f"The seasons of {' and '.join(subtitle_teams_hl)}."
+            subtitle_text = f"The season of {' and '.join(subtitle_teams_hl)}"
         elif len(subtitle_teams) > 2:
-            subtitle_text = f"The seasons of {', '.join(subtitle_teams_hl[:-2])}, {' and '.join(subtitle_teams_hl[-2:])}."
+            subtitle_text = f"The season of {', '.join(subtitle_teams_hl[:-2])}, {' and '.join(subtitle_teams_hl[-2:])}"
 
         highlight_textprops = [{'color': c,
                                 'fontweight': 'bold'} for c in subtitle_colors]
-        fig_text(x=0.5,
-                 y=0.82,
-                 s=subtitle_text,
-                 color='w',
-                 highlight_textprops=highlight_textprops,
-                 fontsize=18,
-                 ha='center',
-                 fontname='Rockwell')
+        fig_text(x=0.5, y=0.82, s=subtitle_text, color='w',
+                 highlight_textprops=highlight_textprops, fontsize=18, ha='center', fontname='Rockwell')
 
     # X-axis
     ax.text(x=num_games/2, y=num_teams+0.5, s='Matchday',
@@ -182,11 +176,11 @@ def draw_plot(league, season, standings, highlight_colors,
     # Axis configuration
     ax.set_axis_off()
 
-    ax.set_xlim(-2, num_games+2)
+    ax.set_xlim(-2, num_games+3)
     if subtitle:
-        ax.set_ylim(-3.5, num_teams+1)
+        ax.set_ylim(-4, num_teams+1)
     else:
-        ax.set_ylim(-2, num_teams+1)
+        ax.set_ylim(-2.5, num_teams+1)
 
     ax.invert_yaxis()
 
@@ -200,6 +194,7 @@ def draw_plot(league, season, standings, highlight_colors,
                 for i in range(num_teams)]
 
     return fig
+
 
 # ---------- Page setup ----------
 
@@ -228,9 +223,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------- League and Season Selection ----------
 
-session_state = SessionState.get(checkboxed=False)
+# ---------- League and Season Selection ----------
 
 # League name mapping to worldfootball.net identifier
 league_dict = {'Premier League': 'eng-premier-league',
@@ -256,12 +250,17 @@ season = st.sidebar.number_input('Season',
 season_title = f'Selected season: {season-1}/{str(season)[2:]}'
 st.sidebar.write(season_title)
 
+# Initiate session
+session_state = SessionState.get(checkboxed=False)
+
 if st.sidebar.button('Gather data') or session_state.checkboxed:
-    with st.spinner('Scraping data...'):
+    with st.spinner('Gathering data...'):
         standings = scrape_standings(league, season)
         session_state.checkboxed = True
 
+
 # ---------- Plot configuration ----------
+
 if session_state.checkboxed:
     # Sidebar title
     st.sidebar.markdown('## Plot aesthetics')
@@ -298,7 +297,7 @@ if session_state.checkboxed:
     aspect_ratio = st.sidebar.slider(label='Aspect ratio',
                                      min_value=0.4,
                                      max_value=0.8,
-                                     value=0.60,
+                                     value=0.55,
                                      step=0.05)
 
     # Background color picker
@@ -308,6 +307,7 @@ if session_state.checkboxed:
 
 
 # ---------- Display plot ----------
+
 if session_state.checkboxed:
     fig = draw_plot(league, season, standings, highlight_colors,
                     facecolor, custom_title, subtitle)
